@@ -1,0 +1,66 @@
+#!/bin/bash
+
+#Make directory to store script recordings
+mkdir results
+
+#Set variables
+gnu="./gnuplot"
+quit=0
+seconds=0
+
+#Exit function for USR1 trap. Creates gnuplot graphs from .dat files and changes $quit to 1, ending the script.
+exit ()
+{ 
+       	eval $gnu	
+	quit=1
+}
+
+#SIGUSR1 trap that calls exit function
+trap exit SIGUSR1
+
+#While loop. While $quit variable is equal to zero execute all commands between 'do' and 'done' repeatedly
+while [[ $quit -eq 0 ]]
+do 
+
+#Add 1 to seconds counter on each loop 
+let seconds++
+
+#Locate CPU temp
+cpuTempA=$(cat /sys/class/thermal/thermal_zone0/temp)
+#Convert CPU temp from milicelcius to Celcius and print to two decimal places.
+cpuTempB=$(echo "scale=2; $cpuTempA / 1000" | bc)
+#On first loop, create a file called CPUTemp.dat. Add current count & CPU Temp reading to this file after each subsequent loop.
+
+#Locate GPU Temp using vcgencmd, trim unessesary readouts, record to 2 decimal places
+gpuTemp=$(vcgencmd measure_temp | cut -d '=' -f 2 |  awk '{printf"%.2f", $1}' ) 
+
+
+#Locate Frequency using vcgencmd and trim unessesary bits
+freqA=$(vcgencmd measure_clock arm | cut -d '=' -f 2)
+#Convet freq reading from Hz to GHz
+freqB=$(echo "scale=2; $freqA / 1000000" | bc)
+
+#Locate RAM useage with 'free' command. Convert from kilobytes to Gb.
+#Used RAM in 3rd position
+usedRAM=$(free | awk '/Mem/ {printf"%.2f", (($3/1024)/1024)}')
+#Free RAM in 4th position
+freeRAM=$(free | awk '/Mem/ {printf"%.2f", (($4/1024)/1024)}')
+#Cached RAM in 6th position
+cachedRAM=$(free | awk '/Mem/ {printf"%.2f", (($6/1024)/1024)}')
+
+#Calculate total CPU use using mpstat, CPU usage = 100 - idle
+#loads=$(mpstat 1 1 | awk ' )
+#Display read out to nearest 2 decimal points
+#loads2=$(echo "scale=2; $loads" | bc)
+
+
+#On first loop, create a file called CPUUsage.dat and results.dat to record all readings into.
+#echo "$seconds $loads2" >> ./results/CPUUsage.dat
+echo "$seconds $cpuTempB $gpuTemp $freqB $freeRAM $usedRAM $cachedRAM" >> ./results/results.dat
+
+#Sleep delay to accurately get one reading per loop
+sleep 1
+
+#Finish while loop
+done
+
